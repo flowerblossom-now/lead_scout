@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% block title %}Лиды — {{ city }}{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h4 class="mb-0"><i class="bi bi-geo-alt-fill"></i> Лиды · {{ city }} <span class="badge bg-secondary">{{ leads|length }}</span></h4>
+    <div>
+        <a class="btn btn-outline-success btn-sm"
+           href="{{ url_for('export', niche=f_niche, status=f_status, min_score=f_min_score, q=f_search) }}">
+            <i class="bi bi-file-earmark-excel"></i> Excel
+        </a>
+        <form method="post" action="{{ url_for('backup') }}" class="d-inline">
+            <button class="btn btn-outline-secondary btn-sm"><i class="bi bi-database-down"></i> Бэкап</button>
+        </form>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body py-3">
+        <form id="scanForm" class="d-flex flex-wrap align-items-center gap-2">
+            <span class="fw-bold me-2"><i class="bi bi-radar"></i> Сканировать:</span>
+            {% for n in niches %}
+            <label class="btn btn-outline-secondary btn-sm mb-0">
+                <input type="checkbox" name="niches" value="{{ n.id }}" class="form-check-input me-1">{{ n.emoji }} {{ n.title }}
+            </label>
+            {% endfor %}
+            <button type="submit" id="scanBtn" class="btn btn-primary btn-sm">
+                <i class="bi bi-play-fill"></i> Запустить
+            </button>
+            <span id="scanStatus" class="small text-muted ms-2"></span>
+        </form>
+        <div class="small text-muted mt-1">Ничего не отмечено = все ниши (30 запросов к 2ГИС). Отмеченные — по 3 запроса на нишу.</div>
+    </div>
+</div>
+
+<script>
+const form = document.getElementById('scanForm');
+const btn = document.getElementById('scanBtn');
+const status = document.getElementById('scanStatus');
+let timer = null;
+
+async function poll() {
+    const r = await fetch('/scan/status');
+    const s = await r.json();
+    if (s.error) { status.textContent = '⚠️ ' + s.error; status.className = 'small text-danger ms-2'; }
+    else { status.textContent = s.message; status.className = 'small text-muted ms-2'; }
+    if (!s.running) {
+        clearInterval(timer); timer = null;
+        btn.disabled = false;
+        if (!s.error && s.message.startsWith('Готово')) setTimeout(() => location.reload(), 1500);
+    }
+}
+
+form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    btn.disabled = true;
+    await fetch('/scan', {method: 'POST', body: new FormData(form)});
+    timer = setInterval(poll, 1500);
+    poll();
+});
+// если скан уже идёт при открытии страницы
+fetch('/scan/status').then(r => r.json()).then(s => {
+    if (s.running) { btn.disabled = true; timer = setInterval(poll, 1500); }
+});
+</script>
+
+<form method="get" class="row g-2 mb-3">
+    <div class="col-auto">
+        <select name="niche" class="form-select form-select-sm">
+            <option value="">Все ниши</option>
+            {% for n in niches %}
+            <option value="{{ n.id }}" {% if f_niche == n.id %}selected{% endif %}>{{ n.emoji }} {{ n.title }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="col-auto">
+        <select name="status" class="form-select form-select-sm">
+            <option value="">Все статусы</option>
+            {% for s in statuses %}
+            <option value="{{ s }}" {% if f_status == s %}selected{% endif %}>{{ s }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="col-auto">
+        <select name="min_score" class="form-select form-select-sm">
+            <option value="0">Любой балл</option>
+            {% for v in [5, 7, 9] %}
+            <option value="{{ v }}" {% if f_min_score == v %}selected{% endif %}>Балл ≥ {{ v }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="col-auto">
+        <input type="text" name="q" class="form-control form-control-sm"
+               placeholder="Поиск: название / адрес / телефон" value="{{ f_search }}">
+    </div>
+    <div class="col-auto">
+        <button class="btn btn-primary btn-sm">Фильтр</button>
+        <a href="{{ url_for('index') }}" class="btn btn-link btn-sm">Сброс</a>
+    </div>
+</form>
+
+<div class="table-responsive">
+<table class="table table-hover table-sm align-middle">
+    <thead class="table-light">
+        <tr>
+            <th>🎯</th><th>Название</th><th>Ниша</th><th>Адрес</th>
+            <th>Контакты</th><th>⭐</th><th>AI-резюме / оффер</th><th>Статус</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for l in leads %}
+        <tr class="{% if l.ai_score and l.ai_score >= 8 %}table-success{% elif l.ai_score and l.ai_score >= 6 %}table-warning{% endif %}">
+            <td><b>{{ l.ai_score or '—' }}</b></td>
+            <td>{{ l.name }}</td>
+            <td>{{ l.niche }}</td>
+            <td class="small">{{ l.address or '—' }}</td>
+            <td class="small">
+                {{ l.phone or '' }}<br>
+                {% if l.website %}<a href="{{ l.website }}" target="_blank">сайт</a>{% else %}<span class="text-danger">нет сайта</span>{% endif %}
+                {% if l.socials %}<br><span class="text-muted">{{ l.socials }}</span>{% endif %}
+            </td>
+            <td class="small">{{ l.rating or '—' }}<br>({{ l.reviews_count or 0 }})</td>
+            <td class="small" style="max-width: 380px;">
+                {{ l.ai_summary or '' }}
+                {% if l.ai_offer %}
+                <details><summary class="text-primary">оффер</summary>{{ l.ai_offer }}</details>
+                {% endif %}
+            </td>
+            <td>
+                <form method="post" action="{{ url_for('change_status', lead_id=l.id) }}">
+                    <select name="status" class="form-select form-select-sm" onchange="this.form.submit()">
+                        {% for s in statuses %}
+                        <option value="{{ s }}" {% if l.status == s %}selected{% endif %}>{{ s }}</option>
+                        {% endfor %}
+                    </select>
+                </form>
+            </td>
+        </tr>
+    {% else %}
+        <tr><td colspan="8" class="text-center text-muted py-4">Лидов пока нет — запусти /scan в Telegram-боте</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+{% endblock %}
