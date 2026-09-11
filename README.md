@@ -1,22 +1,31 @@
 # Lead Scout
 
-Бот для поиска малого бизнеса в Краснодаре, которому можно продать автоматизацию (сайты, боты, CRM). Собран на той же связке, что и recruiting_bot: aiogram + Flask-панель + SQLite + немного AI.
+> **Prototype / demo project.**
 
-Идея простая: `/scan` в Telegram проходит по 2ГИС Places API и вытаскивает организации по десятку ниш — салоны, стоматологии, автосервисы, фитнес, кафе и так далее. Дальше AI смотрит на каждую и прикидывает, насколько ей больно без автоматизации (нет сайта, нет онлайн-записи, живой поток клиентов) — ставит оценку 1–10 и сразу набрасывает черновик первого сообщения владельцу. Всё, что набрало 7+, падает в чат карточкой с кнопками статусов, а полная таблица с фильтрами и экспортом в Excel живёт на панели (`http://localhost:5060`).
+A Telegram bot that hunts for local businesses in Krasnodar that could actually use automation — no website, no online booking, nothing. Built on the same stack as [recruiting_bot](https://github.com/dockergits/recruiting_bot): aiogram + a Flask dashboard + SQLite, with a pinch of AI on top.
 
-Важно: бот сам ничего не рассылает — массовая рассылка бизнесам была бы спамом и нарушением ФЗ «О рекламе». Он только готовит список и тексты, а связывается с людьми уже менеджер вручную.
+`/scan` crawls the 2GIS Places API across a dozen niches — beauty salons, dental clinics, auto repair shops, gyms, cafes, and more. For each business, an AI model scores how much it would benefit from automation (1–10, based on signals like a missing website or no online booking) and drafts a first-contact message. Anything scoring 7+ shows up as a card with status buttons right in the chat, and the full list lives on a dashboard (`http://localhost:5060`) with filters and Excel export.
 
-## Запуск
+**Note:** the bot never messages businesses on its own — bulk outreach like that would be spam. It only prepares the shortlist and the draft text; a human sends the actual message.
+
+## Highlights
+
+- Automated lead discovery via the 2GIS Places API, filtered by niche
+- AI scoring + drafted outreach message per lead
+- Hot leads (7+) delivered as interactive Telegram cards
+- Web dashboard with filtering and Excel export
+
+## Run it
 
 ```bash
-cp .env.example .env   # вписать BOT_TOKEN, MANAGER_CHAT_IDS, DGIS_API_KEY
+cp .env.example .env   # set BOT_TOKEN, MANAGER_CHAT_IDS, DGIS_API_KEY
 python3 -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 python3 run.py
 ```
 
-## Команды
+## Bot commands
 
-- `/scan` — просканировать все ниши, `/scan beauty dental` — только выбранные
-- `/top` — топ-5 необработанных лидов
-- `/niches` — список доступных ниш
+- `/scan` — scan all niches, `/scan beauty dental` — only selected ones
+- `/top` — top 5 unprocessed leads
+- `/niches` — list available niches
